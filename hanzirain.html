@@ -2,8 +2,8 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Magic Hanzi Defense (v5.1)</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Magic Hanzi Defense (v5.2)</title>
     <!-- 引入轻量级拼音库 -->
     <script src="https://unpkg.com/pinyin-pro@3.19.6/dist/index.js"></script>
     <style>
@@ -53,9 +53,7 @@
             box-sizing: border-box;
         }
 
-        .save-tip {
-            font-size: 12px; color: #94a3b8; margin-bottom: 20px; text-align: right; width: 100%;
-        }
+        .save-tip { font-size: 12px; color: #94a3b8; margin-bottom: 20px; text-align: right; width: 100%; }
         
         .difficulty-selector { display: flex; gap: 20px; justify-content: center; margin-bottom: 30px; }
         .radio-label { cursor: pointer; display: flex; align-items: center; gap: 8px; font-size: 1.1rem; }
@@ -83,7 +81,7 @@
             box-shadow: 0 -10px 30px rgba(239, 68, 68, 0.5);
         }
 
-        /* --- Bubble & Pinyin Hints --- */
+        /* --- Bubble & Pinyin Hints (Modified) --- */
         .bubble {
             position: absolute; width: 80px; height: 80px;
             border-radius: 50%;
@@ -94,6 +92,8 @@
             color: white;
             box-shadow: 0 0 15px rgba(0,0,0,0.5);
             will-change: top;
+            /* 关键修改：允许拼音显示在圆圈外面 */
+            overflow: visible !important; 
         }
 
         .char-text {
@@ -101,16 +101,38 @@
         }
 
         .pinyin-hint {
-            font-size: 16px; color: var(--gold); font-weight: normal;
+            position: absolute;
+            /* 关键修改：移到圆圈上方外面 */
+            top: -45px; 
+            width: 150%; /* 防止拼音太长换行 */
+            text-align: center;
+            
+            font-size: 20px; 
+            color: var(--gold); 
+            font-weight: bold;
             font-family: "Segoe UI", sans-serif;
+            
+            /* 关键修改：增加文字阴影，保证在星空背景下清晰可见 */
+            text-shadow: 
+                -1px -1px 0 #000,  
+                 1px -1px 0 #000,
+                -1px  1px 0 #000,
+                 1px  1px 0 #000,
+                 0 0 10px rgba(0,0,0,0.8);
+
             opacity: 0; 
-            transform: translateY(-5px);
-            transition: all 0.5s ease;
-            position: absolute; top: 10px;
+            transform: translateY(10px);
+            transition: all 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275); /* 弹性动画 */
+            pointer-events: none;
         }
 
         .bubble.show-hint .pinyin-hint { opacity: 1; transform: translateY(0); }
-        .bubble.show-hint { border-color: var(--gold); box-shadow: 0 0 20px rgba(255, 215, 0, 0.3); }
+        
+        /* 气泡发光效果 */
+        .bubble.show-hint { 
+            border-color: var(--gold); 
+            box-shadow: 0 0 25px rgba(255, 215, 0, 0.4); 
+        }
 
         /* Projectile */
         .projectile {
@@ -133,17 +155,16 @@
         }
         #input-field:focus { border-color: var(--primary); background: rgba(0,0,0,0.6); }
 
-        /* --- 1. Result Modal & Review --- */
+        /* --- Result Modal --- */
         #result-modal {
             display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%;
             background: rgba(0,0,0,0.95); z-index: 1000;
             justify-content: center; align-items: center; flex-direction: column;
             font-family: "Segoe UI", sans-serif;
-            overflow-y: auto; /* 允许小屏滚动 */
+            overflow-y: auto; 
         }
         .result-title { font-size: 3rem; margin: 0 0 10px 0; text-align: center; }
         
-        /* Review Grid */
         .review-container {
             margin: 20px 0; width: 90%; max-width: 600px;
             background: rgba(255,255,255,0.05); padding: 20px; border-radius: 15px;
@@ -157,7 +178,7 @@
             cursor: pointer; transition: transform 0.2s, background 0.2s;
             display: flex; flex-direction: column; align-items: center;
             border: 1px solid #475569;
-            min-width: 60px; /* 增大触控区域 */
+            min-width: 60px;
         }
         .review-card:hover { transform: scale(1.1); background: var(--primary); color: black; }
         .review-card .rc-char { font-family: "KaiTi", serif; font-size: 28px; font-weight: bold; }
@@ -168,16 +189,10 @@
         @media (max-width: 600px) {
             #header { padding: 10px 20px; font-size: 0.9rem; }
             .stat { font-size: 1rem; }
-            
-            /* 结算画面手机优化 */
             .result-title { font-size: 3.5rem; line-height: 1.1; margin-top: 20px;} 
             #result-msg { font-size: 1.5rem; }
-            
-            /* 复习卡片更大，方便点击 */
             .review-card { padding: 15px 20px; min-width: 70px; }
             .review-card .rc-char { font-size: 36px; }
-            .review-card .rc-pinyin { font-size: 16px; }
-            
             #input-field { width: 80%; }
         }
     </style>
@@ -187,7 +202,7 @@
     <!-- Setup Screen -->
     <div id="setup-screen">
         <div class="panel">
-            <h1>✨ Hanzi Defense (v5.1)</h1>
+            <h1>✨ Hanzi Defense (v5.2)</h1>
             <p style="color:#94a3b8; text-align:left">1. Paste text:</p>
             <textarea id="word-source" placeholder="e.g., 你好世界 (Paste lesson text here)"></textarea>
             <div class="save-tip">✅ Auto-saves your text</div>
@@ -199,6 +214,7 @@
             </div>
 
             <div>
+                <!-- 点击此按钮时，我们会强制唤醒音频 -->
                 <button class="btn-primary" onclick="parseAndStart()">Start Game</button>
                 <button class="btn-secondary" onclick="shareLink()">🔗 Copy Link</button>
             </div>
@@ -226,7 +242,6 @@
         <h1 id="result-title" class="result-title"></h1>
         <p id="result-msg" style="color: #cbd5e1; font-size: 1.2rem;"></p>
         
-        <!-- Review Section -->
         <div id="review-section" class="review-container" style="display:none;">
             <div style="color: #ef4444; font-weight:bold; margin-bottom:10px; font-size:1.2rem;">
                 📢 Review & Click to Listen:
@@ -238,11 +253,26 @@
     </div>
 
     <script>
-        // --- Audio & TTS ---
+        // --- Audio & TTS Engine ---
         const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         
+        // 关键修复：手机端音频唤醒函数
+        function unlockAudio() {
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+            // 播放一个极短的静音，强制 iOS Safari 激活音频线程
+            const buffer = audioCtx.createBuffer(1, 1, 22050);
+            const source = audioCtx.createBufferSource();
+            source.buffer = buffer;
+            source.connect(audioCtx.destination);
+            source.start(0);
+        }
+
         function playSound(type) {
+            // 确保上下文是运行的
             if (audioCtx.state === 'suspended') audioCtx.resume();
+            
             const osc = audioCtx.createOscillator();
             const gain = audioCtx.createGain();
             osc.connect(gain); gain.connect(audioCtx.destination);
@@ -290,7 +320,6 @@
         let lastTime = 0;
         let spawnTimer = 0;
 
-        // --- Init & Auto-Save Logic ---
         const { pinyin } = pinyinPro; 
 
         window.onload = () => {
@@ -298,15 +327,14 @@
             const words = params.get('words');
             const diff = params.get('diff');
             
-            // 3. 自动读取保存的汉字
             if (words) {
-                // 如果URL有参数，优先使用URL
                 document.getElementById('word-source').value = decodeURIComponent(words);
                 if (diff) document.querySelector(`input[value="${diff}"]`).checked = true;
                 document.getElementById('setup-screen').style.display = 'none';
+                // 自动开始时，可能因为没有用户点击而无法播放声音，这是浏览器的限制
+                // 但如果用户是点击链接进来的，第一次点击屏幕任意位置可以唤醒，这里暂不处理
                 initGame(decodeURIComponent(words), diff || 'easy');
             } else {
-                // 否则检查 localStorage
                 const savedText = localStorage.getItem('hanzi_saved_text');
                 if (savedText) {
                     document.getElementById('word-source').value = savedText;
@@ -315,14 +343,15 @@
         };
 
         function parseAndStart() {
+            // 1. 关键：用户点击按钮时，立即唤醒音频
+            unlockAudio();
+
             const text = document.getElementById('word-source').value;
             const diff = document.querySelector('input[name="diff"]:checked').value;
             
             if (!text.trim()) return alert("Please enter text!");
             
-            // 3. 自动保存汉字到本地
             localStorage.setItem('hanzi_saved_text', text);
-
             document.getElementById('setup-screen').style.transform = 'translateY(-100%)';
             initGame(text, diff);
         }
@@ -346,7 +375,6 @@
             document.getElementById('input-field').focus();
             lastTime = performance.now();
             
-            // 1. 立即生成第一个字，不用等
             spawnOne();
             spawnTimer = 0;
 
@@ -562,8 +590,15 @@
             }
         }
         
-        document.addEventListener('click', () => {
-           if(isPlaying) document.getElementById('input-field').focus(); 
+        // 当点击任意位置时，确保输入框获得焦点（方便打字）
+        // 但注意：这在手机上可能会弹起键盘，遮挡屏幕。
+        // 在手机上，通常用户点击输入框才会弹键盘。
+        // 这里的逻辑主要服务于桌面端。
+        document.addEventListener('click', (e) => {
+           // 只有当游戏进行中，且点击的不是输入框本身时，才强制聚焦
+           if(isPlaying && e.target.id !== 'input-field') {
+               document.getElementById('input-field').focus(); 
+           }
         });
     </script>
 </body>
