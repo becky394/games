@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <!-- 关键修改：禁止缩放，锁定视口 -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Magic Hanzi Defense (v5.3 Mobile)</title>
+    <script src="https://unpkg.com/pinyin-pro@3.19.6/dist/index.js"></script>
+    <style>
+        /* --- 基础样式 --- */
+        :root {
+            --primary: #00f2ff;
+            --gold: #ffd700;
+            --bg-dark: #0f172a;
+            --danger: #ef4444;
+        }
+
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: "KaiTi", "STKaiti", "Microsoft YaHei", serif;
+            background: radial-gradient(circle at center, #1e293b 0%, #020617 100%);
+            color: white;
+            display: flex;
+            flex-direction: column;
+            /* 关键修改：使用 dvh 适应手机浏览器地址栏的变化 */
+            height: 100vh; 
+            height: 100dvh; 
+        }
+
+        /* --- 1. 备战/设置界面 --- */
+        #setup-screen {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(15, 23, 42, 1); z-index: 999;
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+            transition: transform 0.4s ease;
+            font-family: sans-serif;
+            padding: 20px; box-sizing: border-box;
+        }
+
+        /* 专门为学生准备的“备战按钮”容器 */
+        #student-start-panel {
+            display: none; /* 默认隐藏，有参数时显示 */
+            text-align: center;
+        }
+
+        .panel {
+            background: rgba(255, 255, 255, 0.05); padding: 30px;
+            border-radius: 20px; border: 1px solid rgba(255, 255, 255, 0.1);
+            text-align: center; width: 100%; max-width: 500px;
+        }
+
+        /* --- 巨大的开始按钮 (解决手机误触和音频问题) --- */
+        .big-start-btn {
+            background: linear-gradient(135deg, #00f2ff, #0099ff);
+            color: #000; font-weight: 900; font-size: 24px;
+            padding: 20px 60px; border-radius: 60px; border: none;
+            box-shadow: 0 0 30px rgba(0, 242, 255, 0.4);
+            animation: pulse 1.5s infinite;
+            cursor: pointer; margin-top: 20px;
+        }
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+
+        textarea {
+            width: 100%; height: 100px; background: rgba(0,0,0,0.3);
+            border: 2px solid #334155; color: white; font-size: 16px; padding: 10px;
+            border-radius: 10px; margin-bottom: 10px; box-sizing: border-box;
+        }
+
+        /* --- 游戏区域 --- */
+        #header {
+            display: flex; justify-content: space-between; padding: 10px 20px;
+            background: rgba(0,0,0,0.3); backdrop-filter: blur(5px);
+            z-index: 10; font-family: sans-serif; height: 50px; box-sizing: border-box;
+            align-items: center;
+        }
+        .stat { font-size: 1rem; color: #cbd5e1; }
+
+        #game-area { 
+            flex-grow: 1; 
+            position: relative; 
+            overflow: hidden; 
+            /* 确保点击游戏区域也能触发输入框 */
+            touch-action: none;
+        }
+        
+        #danger-zone {
+            position: absolute; bottom: 0; width: 100%; height: 4px;
+            background: linear-gradient(90deg, transparent, var(--danger), transparent);
+            box-shadow: 0 -5px 20px rgba(239, 68, 68, 0.6);
+        }
+
+        /* 汉字气泡 */
+        .bubble {
+            position: absolute; width: 60px; height: 60px; /* 稍微调小一点适配手机 */
+            border-radius: 50%;
+            background: rgba(30, 41, 59, 0.9);
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            display: flex; justify-content: center; align-items: center;
+            color: white; will-change: top; overflow: visible !important;
+        }
+        .char-text { font-size: 32px; font-weight: bold; }
+        
+        /* 拼音 - 优化位置 */
+        .pinyin-hint {
+            position: absolute; top: -30px; width: 120%; text-align: center;
+            font-size: 18px; color: var(--gold); font-weight: bold;
+            text-shadow: 1px 1px 0 #000; opacity: 0; 
+            transition: opacity 0.3s; pointer-events: none; font-family: sans-serif;
+        }
+        .bubble.show-hint .pinyin-hint { opacity: 1; }
+        .bubble.show-hint { border-color: var(--gold); box-shadow: 0 0 15px rgba(255, 215, 0, 0.4); }
+
+        /* --- 2. 输入框优化 (关键) --- */
+        #input-container {
+            position: fixed; bottom: 0; left: 0; width: 100%;
+            padding: 10px; background: rgba(15, 23, 42, 0.95);
+            border-top: 1px solid #334155; z-index: 100;
+            box-sizing: border-box;
+            /* 适配 iPhone 底部横条 */
+            padding-bottom: env(safe-area-inset-bottom);
+        }
+
+        #input-field {
+            font-size: 20px; padding: 12px; width: 100%;
+            background: #fff; border: none; border-radius: 8px;
+            color: #000; text-align: center; outline: none;
+            /* 防止 iOS 放大 */
+            transform: scale(1); 
+        }
+
+        /* 键盘唤醒遮罩 */
+        #keyboard-overlay {
+            display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.6); z-index: 90;
+            justify-content: center; align-items: center; color: white;
+            font-size: 1.5rem; flex-direction: column; backdrop-filter: blur(2px);
+        }
+        .keyboard-icon { font-size: 3rem; margin-bottom: 10px; }
+
+        /* --- 结算与复习 --- */
+        #result-modal {
+            display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(15, 23, 42, 0.98); z-index: 1000;
+            flex-direction: column; align-items: center; overflow-y: auto;
+            padding-top: 50px;
+        }
+        .review-grid { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; padding: 20px; }
+        .review-card {
+            background: #334155; padding: 10px; border-radius: 8px;
+            min-width: 60px; text-align: center;
+        }
+        .review-card .rc-char { font-size: 30px; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+    <!-- Setup Screen -->
+    <div id="setup-screen">
+        
+        <!-- 教师配置面板 (默认显示) -->
+        <div id="teacher-panel" class="panel">
+            <h1 style="color:var(--primary)">👩‍🏫 Teacher Setup</h1>
+            <textarea id="word-source" placeholder="Paste Chinese text here..."></textarea>
+            
+            <div style="margin: 20px 0;">
+                <label><input type="radio" name="diff" value="easy" checked> Easy (Slow)</label>
+                <label style="margin-left:20px"><input type="radio" name="diff" value="hard"> Hard</label>
+            </div>
+            
+            <button class="big-start-btn" style="font-size:18px; padding: 15px 40px;" onclick="teacherStart()">Start & Copy Link</button>
+            <p id="share-tip" style="color:var(--primary); opacity:0; margin-top:10px">Link Copied!</p>
+        </div>
+
+        <!-- 学生开始面板 (带参数时显示此面板) -->
+        <div id="student-start-panel">
+            <h1 style="font-size: 2rem; margin-bottom: 30px;">Ready?</h1>
+            <p style="color:#ccc; margin-bottom: 30px;">Type the falling characters!</p>
+            <!-- 这个巨大的按钮用于唤醒音频和键盘 -->
+            <button class="big-start-btn" onclick="studentStart()">🔥 TAP TO START</button>
+        </div>
+
+    </div>
+
+    <!-- Game UI -->
+    <div id="header">
+        <div class="stat">Left: <span id="remain-val">0</span></div>
+        <div class="stat">Score: <span id="score-val" style="color:var(--primary)">0</span></div>
+        <div class="stat">❤ <span id="lives-val">5</span></div>
+    </div>
+
+    <div id="game-area">
+        <div id="danger-zone"></div>
+        <!-- 唤醒键盘遮罩 -->
+        <div id="keyboard-overlay" onclick="focusInput()">
+            <div class="keyboard-icon">⌨️</div>
+            <div>Tap to Type</div>
+        </div>
+    </div>
+
+    <!-- 输入框固定在底部 -->
+    <div id="input-container">
+        <input type="text" id="input-field" placeholder="Type here..." autocomplete="off" autocapitalize="off">
+    </div>
+
+    <!-- Result Modal -->
+    <div id="result-modal">
+        <h1 id="result-title" style="font-size: 3rem; margin:0; color:var(--primary)">GAME OVER</h1>
+        <p id="result-msg" style="color:#ccc; font-size:1.2rem; margin-bottom:20px"></p>
+        
+        <div id="review-section" style="display:none; width:100%; text-align:center;">
+            <p style="color:var(--danger)">Review Mistakes (Click to listen):</p>
+            <div id="review-grid" class="review-grid"></div>
+        </div>
+
+        <button class="big-start-btn" style="font-size:18px; padding: 15px 40px; margin-bottom:50px" onclick="location.reload()">Play Again</button>
+    </div>
+
+    <script>
+        // --- 1. Audio Engine (Mobile Optimized) ---
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        
+        function unlockAudio() {
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+            // Play silent buffer to unlock iOS audio
+            const buffer = audioCtx.createBuffer(1, 1, 22050);
+            const source = audioCtx.createBufferSource();
+            source.buffer = buffer;
+            source.connect(audioCtx.destination);
+            source.start(0);
+        }
+
+        function playSound(type) {
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.connect(gain); gain.connect(audioCtx.destination);
+            const now = audioCtx.currentTime;
+            
+            // Simple sound synthesis
+            if (type === 'shoot') {
+                osc.frequency.setValueAtTime(300, now);
+                osc.frequency.exponentialRampToValueAtTime(800, now+0.1);
+                gain.gain.setValueAtTime(0.1, now); gain.gain.linearRampToValueAtTime(0, now+0.1);
+                osc.start(now); osc.stop(now+0.1);
+            } else if (type === 'miss') {
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(100, now);
+                osc.frequency.linearRampToValueAtTime(50, now+0.3);
+                gain.gain.setValueAtTime(0.2, now); gain.gain.linearRampToValueAtTime(0, now+0.3);
+                osc.start(now); osc.stop(now+0.3);
+            } else if (type === 'hit') {
+                osc.type = 'square';
+                osc.frequency.setValueAtTime(150, now);
+                osc.frequency.exponentialRampToValueAtTime(50, now+0.2);
+                gain.gain.setValueAtTime(0.2, now); gain.gain.linearRampToValueAtTime(0, now+0.2);
+                osc.start(now); osc.stop(now+0.2);
+            }
+        }
+
+        function speak(text) {
+            window.speechSynthesis.cancel();
+            const u = new SpeechSynthesisUtterance(text);
+            u.lang = 'zh-CN'; u.rate = 0.8;
+            window.speechSynthesis.speak(u);
+        }
+
+        // --- 2. Game State & Config ---
+        let CONFIG = { spawnRate: 2500, speedMin: 0.5, speedMax: 1.0 }; // Faster mobile spawn
+        let wordPool = [], activeWords = [], missedWords = new Set();
+        let score = 0, lives = 5, isPlaying = false;
+        let lastTime = 0, spawnTimer = 0;
+        const { pinyin } = pinyinPro;
+
+        // --- 3. Initialization Logic ---
+        window.onload = () => {
+            const params = new URLSearchParams(window.location.search);
+            const words = params.get('words');
+            const diff = params.get('diff');
+
+            if (words) {
+                // 学生模式：隐藏教师面板，显示“点击开始”面板
+                document.getElementById('teacher-panel').style.display = 'none';
+                document.getElementById('student-start-panel').style.display = 'block';
+                
+                // 预加载配置
+                document.getElementById('word-source').value = decodeURIComponent(words);
+                if (diff) document.querySelector(`input[value="${diff}"]`).checked = true;
+            } else {
+                // 教师模式：读取本地缓存
+                const saved = localStorage.getItem('hanzi_saved');
+                if (saved) document.getElementById('word-source').value = saved;
+            }
+        };
+
+        // 教师点击开始
+        function teacherStart() {
+            const text = document.getElementById('word-source').value;
+            const diff = document.querySelector('input[name="diff"]:checked').value;
+            if(!text.trim()) return alert("Enter text!");
+
+            // 复制链接
+            const url = `${window.location.origin}${window.location.pathname}?words=${encodeURIComponent(text)}&diff=${diff}`;
+            navigator.clipboard.writeText(url).then(() => {
+                document.getElementById('share-tip').style.opacity = 1;
+            });
+            
+            // 稍后开始游戏
+            setTimeout(() => {
+                startSequence(text, diff);
+            }, 1000);
+        }
+
+        // 学生点击开始 (关键交互)
+        function studentStart() {
+            const text = document.getElementById('word-source').value;
+            const diff = document.querySelector('input[name="diff"]:checked').value;
+            startSequence(text, diff);
+        }
+
+        function startSequence(text, diff) {
+            unlockAudio(); // 唤醒音频
+            localStorage.setItem('hanzi_saved', text);
+            
+            // 难度配置
+            if (diff === 'hard') {
+                CONFIG.spawnRate = 1200; CONFIG.speedMin = 1.2; CONFIG.speedMax = 2.0;
+            } else {
+                CONFIG.spawnRate = 3000; CONFIG.speedMin = 0.6; CONFIG.speedMax = 1.0;
+            }
+
+            // 处理文字
+            const chars = text.match(/[\u4e00-\u9fa5]/g);
+            if (!chars) return alert("No Chinese Found");
+            wordPool = [...chars, ...chars];
+            wordPool.sort(() => Math.random() - 0.5);
+
+            // UI 切换
+            document.getElementById('setup-screen').style.transform = 'translateY(-100%)';
+            
+            // 游戏状态重置
+            score = 0; lives = 5; activeWords = []; missedWords.clear();
+            isPlaying = true; 
+            updateUI();
+            
+            // 强制聚焦输入框 (针对手机)
+            focusInput();
+
+            lastTime = performance.now();
+            spawnOne(); spawnTimer = 0; // 立即生成一个
+            requestAnimationFrame(gameLoop);
+        }
+
+        // --- 4. Core Game Loop ---
+        function gameLoop(timestamp) {
+            if (!isPlaying) return;
+            const dt = timestamp - lastTime;
+            lastTime = timestamp;
+
+            spawnTimer += dt;
+            if (spawnTimer > CONFIG.spawnRate && wordPool.length > 0) {
+                spawnOne();
+                spawnTimer = 0;
+            }
+
+            if (wordPool.length === 0 && activeWords.length === 0) return endGame(true);
+
+            // 动态获取高度，因为手机键盘弹起时高度会变
+            const gameH = document.getElementById('game-area').clientHeight;
+
+            activeWords.forEach((w, i) => {
+                w.y += w.speed;
+                w.el.style.top = w.y + 'px';
+
+                // 提前显示提示 (适配手机短屏幕)
+                if (w.y > gameH * 0.4 && !w.hintShown) {
+                    w.el.classList.add('show-hint');
+                    w.hintShown = true;
+                }
+
+                if (w.y > gameH - 40) handleMiss(i);
+            });
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        function spawnOne() {
+            const char = wordPool.shift();
+            const py = pinyin(char);
+            const el = document.createElement('div');
+            el.className = 'bubble';
+            el.innerHTML = `<span class="pinyin-hint">${py}</span><span class="char-text">${char}</span>`;
+            
+            // 避免太靠边
+            const maxW = document.getElementById('game-area').clientWidth - 70;
+            const x = Math.random() * maxW + 5;
+            
+            // 优化：从更低的位置生成，减少等待时间
+            el.style.left = x + 'px';
+            el.style.top = '-60px'; 
+            el.style.borderColor = `hsl(${Math.random()*360}, 80%, 70%)`;
+
+            document.getElementById('game-area').appendChild(el);
+            
+            activeWords.push({
+                el: el, char: char, x: x, y: -60,
+                speed: CONFIG.speedMin + Math.random() * (CONFIG.speedMax - CONFIG.speedMin),
+                hintShown: false
+            });
+            updateUI();
+        }
+
+        // --- 5. Interactions ---
+        const inputField = document.getElementById('input-field');
+        const keyboardOverlay = document.getElementById('keyboard-overlay');
+        
+        // 专门处理键盘焦点丢失
+        inputField.addEventListener('blur', () => {
+            if(isPlaying) keyboardOverlay.style.display = 'flex';
+        });
+
+        function focusInput() {
+            inputField.focus();
+            keyboardOverlay.style.display = 'none';
+        }
+
+        let isComposing = false;
+        inputField.addEventListener('compositionstart', () => isComposing = true);
+        inputField.addEventListener('compositionend', (e) => { isComposing = false; checkInput(e.data); });
+        inputField.addEventListener('input', () => { if (!isComposing && inputField.value) checkInput(inputField.value); });
+
+        function checkInput(text) {
+            if(!text) return;
+            const char = text.slice(-1); // 取最后一个字
+            
+            let targetIdx = -1, maxY = -9999;
+            activeWords.forEach((w, i) => {
+                if (w.char === char) {
+                    if (w.y > maxY) { maxY = w.y; targetIdx = i; }
+                }
+            });
+
+            if (targetIdx !== -1) {
+                // 击中
+                const w = activeWords[targetIdx];
+                playSound('hit');
+                w.el.style.transform = "scale(1.5)";
+                w.el.style.opacity = 0;
+                setTimeout(() => w.el.remove(), 100);
+                activeWords.splice(targetIdx, 1);
+                score += 10;
+                inputField.value = ''; // 清空
+            }
+            updateUI();
+        }
+
+        function handleMiss(i) {
+            const w = activeWords[i];
+            playSound('miss');
+            missedWords.add(w.char);
+            w.el.remove();
+            activeWords.splice(i, 1);
+            wordPool.push(w.char); // 错题重练
+            lives--;
+            if(lives <= 0) endGame(false);
+            updateUI();
+        }
+
+        function updateUI() {
+            document.getElementById('score-val').innerText = score;
+            document.getElementById('lives-val').innerText = lives;
+            document.getElementById('remain-val').innerText = wordPool.length + activeWords.length;
+        }
+
+        function endGame(win) {
+            isPlaying = false;
+            document.getElementById('result-modal').style.display = 'flex';
+            document.getElementById('result-title').innerText = win ? "YOU WIN!" : "GAME OVER";
+            document.getElementById('result-msg').innerText = `Final Score: ${score}`;
+            
+            const reviewGrid = document.getElementById('review-grid');
+            reviewGrid.innerHTML = '';
+            if(missedWords.size > 0) {
+                document.getElementById('review-section').style.display = 'block';
+                missedWords.forEach(char => {
+                    const d = document.createElement('div');
+                    d.className = 'review-card';
+                    d.innerHTML = `<div class="rc-char">${char}</div><div style="font-size:12px">${pinyin(char)}</div>`;
+                    d.onclick = () => speak(char);
+                    reviewGrid.appendChild(d);
+                });
+            }
+        }
+    </script>
+</body>
+</html>
