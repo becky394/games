@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>动物配对 (拼音版)</title>
+    <style>
+        :root {
+            --card-size: 110px; /* 卡片大小 */
+            --gap-size: 15px;
+            --primary-color: #FF9F43;
+            --bg-color: #fdf6e3;
+        }
+
+        body {
+            font-family: "Microsoft YaHei", "SimHei", sans-serif;
+            background-color: var(--bg-color);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        h1 {
+            color: #5d4037;
+            margin: 0 0 10px 0;
+            font-size: 1.8rem;
+        }
+
+        p.instruction {
+            color: #888;
+            margin-bottom: 20px;
+            font-size: 1.1rem;
+        }
+
+        /* 游戏主容器 */
+        .game-board {
+            width: 100%;
+            max-width: 1000px;
+            display: flex;
+            flex-direction: column;
+            gap: 30px;
+        }
+
+        /* 区域容器 */
+        .section-box {
+            background: rgba(255, 255, 255, 0.6);
+            border: 2px dashed #ccc;
+            border-radius: 20px;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .section-title {
+            display: inline-block;
+            background: #fff;
+            padding: 5px 15px;
+            border-radius: 15px;
+            color: #aaa;
+            font-size: 0.9rem;
+            margin-bottom: 15px;
+            font-weight: bold;
+        }
+
+        /* 网格布局 */
+        .grid-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(var(--card-size), 1fr));
+            gap: var(--gap-size);
+            justify-items: center;
+        }
+
+        /* 卡片通用样式 */
+        .card {
+            width: var(--card-size);
+            height: var(--card-size);
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 6px 0 #e0e0e0;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: transform 0.1s, box-shadow 0.1s, background-color 0.3s;
+            position: relative;
+            border: 2px solid #fff;
+        }
+
+        .card:active {
+            transform: translateY(4px);
+            box-shadow: 0 2px 0 #e0e0e0;
+        }
+
+        /* 图片卡片样式 */
+        .card img {
+            width: 80%;
+            height: 80%;
+            object-fit: contain;
+            pointer-events: none;
+            filter: drop-shadow(2px 4px 6px rgba(0,0,0,0.1));
+        }
+
+        /* 文字卡片样式 (修改部分：支持垂直排列) */
+        .text-card {
+            flex-direction: column; /* 垂直排列：拼音在上，汉字在下 */
+            color: #444;
+            background-color: #fff;
+            line-height: 1.3;
+        }
+
+        /* 拼音样式 */
+        .pinyin {
+            font-size: 1rem;
+            color: #888;
+            font-family: Arial, sans-serif; /* 拼音用无衬线字体更清晰 */
+            font-weight: normal;
+        }
+
+        /* 汉字样式 */
+        .hanzi {
+            font-size: 1.6rem;
+            font-weight: 900;
+            color: #333;
+        }
+
+        /* 选中状态 */
+        .selected {
+            border: 4px solid var(--primary-color);
+            background-color: #fff8e1;
+            transform: translateY(-5px);
+            box-shadow: 0 10px 15px rgba(255, 159, 67, 0.4);
+            z-index: 10;
+        }
+
+        /* 错误震动 */
+        .shake {
+            animation: shake 0.5s;
+            border-color: #ff5252;
+            background-color: #ffebee;
+        }
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            20% { transform: translateX(-8px); }
+            40% { transform: translateX(8px); }
+            60% { transform: translateX(-8px); }
+            80% { transform: translateX(8px); }
+        }
+
+        /* 成功消除 */
+        .vanish {
+            animation: popOut 0.6s forwards;
+            pointer-events: none;
+        }
+        @keyframes popOut {
+            0% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.2); opacity: 0; background: #4cd137; }
+            100% { transform: scale(0); opacity: 0; width: 0; margin: 0; border: 0; padding: 0;}
+        }
+
+        /* 胜利弹窗 */
+        #victory-screen {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.85);
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            z-index: 1000;
+        }
+        #victory-screen h2 { font-size: 3rem; margin-bottom: 20px; }
+        
+        button.restart-btn {
+            padding: 15px 40px;
+            font-size: 1.5rem;
+            border: none;
+            background: #4cd137;
+            color: white;
+            border-radius: 50px;
+            cursor: pointer;
+            box-shadow: 0 5px 0 #2ecc71;
+            font-weight: bold;
+        }
+        button.restart-btn:active { transform: translateY(5px); box-shadow: none; }
+
+        @media (max-width: 600px) {
+            :root { --card-size: 85px; }
+            .game-board { gap: 15px; }
+            .section-box { padding: 10px; }
+            h1 { font-size: 1.5rem; }
+            .pinyin { font-size: 0.8rem; }
+            .hanzi { font-size: 1.3rem; }
+        }
+    </style>
+</head>
+<body>
+
+    <h1>🦁 动物配对连连看</h1>
+    <p class="instruction">点击图片，再点击带拼音的词汇</p>
+
+    <div class="game-board">
+        <!-- 图片区 -->
+        <div class="section-box">
+            <div class="section-title">图片区</div>
+            <div class="grid-container" id="img-grid"></div>
+        </div>
+
+        <!-- 汉字区 -->
+        <div class="section-box">
+            <div class="section-title">词汇区</div>
+            <div class="grid-container" id="word-grid"></div>
+        </div>
+    </div>
+
+    <div id="victory-screen">
+        <h2>🎉 完成啦！</h2>
+        <button class="restart-btn" onclick="location.reload()">再玩一次</button>
+    </div>
+
+    <script>
+        const baseUrl = "https://cdnjs.cloudflare.com/ajax/libs/twemoji/14.0.2/svg/";
+        
+        // 数据增加了 pinyin 字段
+        const animals = [
+            { id: 'tiger',    text: '老虎', pinyin: 'lǎo hǔ',     code: '1f42f' },
+            { id: 'rabbit',   text: '兔子', pinyin: 'tù zi',      code: '1f430' },
+            { id: 'cat',      text: '猫',   pinyin: 'māo',        code: '1f431' },
+            { id: 'dog',      text: '狗',   pinyin: 'gǒu',        code: '1f436' },
+            { id: 'horse',    text: '马',   pinyin: 'mǎ',         code: '1f434' },
+            { id: 'cow',      text: '牛',   pinyin: 'niú',        code: '1f42e' },
+            { id: 'sheep',    text: '羊',   pinyin: 'yáng',       code: '1f411' },
+            { id: 'snake',    text: '蛇',   pinyin: 'shé',        code: '1f40d' },
+            { id: 'monkey',   text: '猴子', pinyin: 'hóu zi',     code: '1f435' },
+            { id: 'panda',    text: '熊猫', pinyin: 'xióng māo',  code: '1f43c' },
+            { id: 'elephant', text: '大象', pinyin: 'dà xiàng',   code: '1f418' }
+        ];
+
+        let selectedImg = null;
+        let selectedWord = null;
+        let matches = 0;
+        let lockBoard = false;
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+        function playTone(type) {
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+            const osc = audioCtx.createOscillator();
+            const gainNode = audioCtx.createGain();
+            osc.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+
+            if (type === 'correct') {
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(523.25, audioCtx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(659.25, audioCtx.currentTime + 0.1);
+                gainNode.gain.setValueAtTime(0.1, audioCtx.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.5);
+                osc.start();
+                osc.stop(audioCtx.currentTime + 0.5);
+            } else {
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(150, audioCtx.currentTime);
+                osc.frequency.linearRampToValueAtTime(100, audioCtx.currentTime + 0.2);
+                gainNode.gain.setValueAtTime(0.1, audioCtx.currentTime);
+                gainNode.gain.linearRampToValueAtTime(0.001, audioCtx.currentTime + 0.3);
+                osc.start();
+                osc.stop(audioCtx.currentTime + 0.3);
+            }
+        }
+
+        function shuffle(array) {
+            return array.sort(() => Math.random() - 0.5);
+        }
+
+        function initGame() {
+            const imgGrid = document.getElementById('img-grid');
+            const wordGrid = document.getElementById('word-grid');
+
+            const imgData = shuffle([...animals]);
+            const wordData = shuffle([...animals]);
+
+            // 图片卡片
+            imgData.forEach(item => {
+                const card = document.createElement('div');
+                card.className = 'card img-card';
+                card.dataset.id = item.id;
+                card.dataset.type = 'img';
+                card.innerHTML = `<img src="${baseUrl}${item.code}.svg" alt="${item.text}">`;
+                card.onclick = handleCardClick;
+                imgGrid.appendChild(card);
+            });
+
+            // 文字卡片 (增加了拼音结构)
+            wordData.forEach(item => {
+                const card = document.createElement('div');
+                card.className = 'card text-card';
+                card.dataset.id = item.id;
+                card.dataset.type = 'word';
+                // 这里的结构变为：上拼音，下汉字
+                card.innerHTML = `
+                    <span class="pinyin">${item.pinyin}</span>
+                    <span class="hanzi">${item.text}</span>
+                `;
+                card.onclick = handleCardClick;
+                wordGrid.appendChild(card);
+            });
+        }
+
+        function handleCardClick(e) {
+            if (lockBoard) return;
+            const clicked = e.currentTarget;
+            if (clicked.classList.contains('selected')) return;
+
+            if (clicked.dataset.type === 'img') {
+                if (selectedImg) selectedImg.classList.remove('selected');
+                selectedImg = clicked;
+                selectedImg.classList.add('selected');
+            } else {
+                if (selectedWord) selectedWord.classList.remove('selected');
+                selectedWord = clicked;
+                selectedWord.classList.add('selected');
+            }
+
+            if (selectedImg && selectedWord) {
+                checkMatch();
+            }
+        }
+
+        function checkMatch() {
+            lockBoard = true;
+            const isMatch = selectedImg.dataset.id === selectedWord.dataset.id;
+
+            if (isMatch) {
+                playTone('correct');
+                selectedImg.classList.add('vanish');
+                selectedWord.classList.add('vanish');
+                matches++;
+                resetSelection();
+                if (matches === animals.length) {
+                    setTimeout(() => {
+                        document.getElementById('victory-screen').style.display = 'flex';
+                        playTone('correct');
+                    }, 600);
+                }
+            } else {
+                playTone('wrong');
+                selectedImg.classList.add('shake');
+                selectedWord.classList.add('shake');
+                setTimeout(() => {
+                    selectedImg.classList.remove('shake', 'selected');
+                    selectedWord.classList.remove('shake', 'selected');
+                    resetSelection();
+                }, 500);
+            }
+        }
+
+        function resetSelection() {
+            selectedImg = null;
+            selectedWord = null;
+            lockBoard = false;
+        }
+
+        initGame();
+    </script>
+</body>
+</html>

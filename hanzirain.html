@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Magic Hanzi Defense (v5.1)</title>
+    <!-- 引入轻量级拼音库 -->
+    <script src="https://unpkg.com/pinyin-pro@3.19.6/dist/index.js"></script>
+    <style>
+        /* --- Core Styles --- */
+        :root {
+            --primary: #00f2ff;
+            --accent: #ff00cc;
+            --gold: #ffd700;
+            --bg-dark: #0f172a;
+            --danger: #ef4444;
+        }
+
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: "KaiTi", "STKaiti", "BiauKai", "Microsoft YaHei", serif;
+            background: radial-gradient(circle at center, #1e293b 0%, #020617 100%);
+            color: white;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+
+        /* --- Setup Screen --- */
+        #setup-screen {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(15, 23, 42, 0.98); z-index: 999;
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+            transition: transform 0.5s ease;
+            font-family: "Segoe UI", sans-serif;
+        }
+
+        .panel {
+            background: rgba(255, 255, 255, 0.05); padding: 40px;
+            border-radius: 20px; border: 1px solid rgba(255, 255, 255, 0.1);
+            text-align: center; box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+            max-width: 600px; width: 90%;
+        }
+
+        h1 { color: var(--primary); margin-top: 0; }
+        
+        textarea {
+            width: 100%; height: 100px; background: rgba(0,0,0,0.3);
+            border: 2px solid #334155; color: white; font-size: 18px; padding: 10px;
+            border-radius: 10px; margin-bottom: 10px; resize: none;
+            box-sizing: border-box;
+        }
+
+        .save-tip {
+            font-size: 12px; color: #94a3b8; margin-bottom: 20px; text-align: right; width: 100%;
+        }
+        
+        .difficulty-selector { display: flex; gap: 20px; justify-content: center; margin-bottom: 30px; }
+        .radio-label { cursor: pointer; display: flex; align-items: center; gap: 8px; font-size: 1.1rem; }
+        
+        button {
+            padding: 12px 30px; font-size: 16px; border-radius: 50px; border: none;
+            cursor: pointer; font-weight: bold; transition: all 0.2s; margin: 5px;
+        }
+        .btn-primary { background: linear-gradient(45deg, var(--primary), #0099ff); color: #000; }
+        .btn-secondary { background: transparent; border: 2px solid var(--accent); color: var(--accent); }
+
+        /* --- Game Interface --- */
+        #header {
+            display: flex; justify-content: space-between; padding: 20px 40px;
+            background: rgba(0,0,0,0.2); backdrop-filter: blur(10px);
+            z-index: 10; font-family: "Segoe UI", sans-serif;
+        }
+        .stat { font-size: 1.2rem; font-weight: bold; color: #cbd5e1; }
+
+        #game-area { flex-grow: 1; position: relative; overflow: hidden; }
+        
+        #danger-zone {
+            position: absolute; bottom: 0; width: 100%; height: 5px;
+            background: linear-gradient(90deg, transparent, var(--danger), transparent);
+            box-shadow: 0 -10px 30px rgba(239, 68, 68, 0.5);
+        }
+
+        /* --- Bubble & Pinyin Hints --- */
+        .bubble {
+            position: absolute; width: 80px; height: 80px;
+            border-radius: 50%;
+            background: rgba(30, 41, 59, 0.85);
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            display: flex; flex-direction: column; 
+            justify-content: center; align-items: center;
+            color: white;
+            box-shadow: 0 0 15px rgba(0,0,0,0.5);
+            will-change: top;
+        }
+
+        .char-text {
+            font-size: 38px; font-weight: bold; line-height: 1;
+        }
+
+        .pinyin-hint {
+            font-size: 16px; color: var(--gold); font-weight: normal;
+            font-family: "Segoe UI", sans-serif;
+            opacity: 0; 
+            transform: translateY(-5px);
+            transition: all 0.5s ease;
+            position: absolute; top: 10px;
+        }
+
+        .bubble.show-hint .pinyin-hint { opacity: 1; transform: translateY(0); }
+        .bubble.show-hint { border-color: var(--gold); box-shadow: 0 0 20px rgba(255, 215, 0, 0.3); }
+
+        /* Projectile */
+        .projectile {
+            position: absolute; width: 50px; height: 50px;
+            background: var(--gold); color: black; border-radius: 50%;
+            display: flex; justify-content: center; align-items: center;
+            font-size: 28px; font-weight: bold; z-index: 50;
+            box-shadow: 0 0 20px var(--gold);
+        }
+
+        #input-container {
+            text-align: center; padding: 30px; background: rgba(0,0,0,0.4);
+            position: relative; z-index: 20;
+        }
+        #input-field {
+            font-size: 28px; padding: 10px 20px; width: 300px;
+            background: rgba(255,255,255,0.1); border: 2px solid #475569;
+            border-radius: 10px; color: white; text-align: center;
+            outline: none; font-family: inherit;
+        }
+        #input-field:focus { border-color: var(--primary); background: rgba(0,0,0,0.6); }
+
+        /* --- 1. Result Modal & Review --- */
+        #result-modal {
+            display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.95); z-index: 1000;
+            justify-content: center; align-items: center; flex-direction: column;
+            font-family: "Segoe UI", sans-serif;
+            overflow-y: auto; /* 允许小屏滚动 */
+        }
+        .result-title { font-size: 3rem; margin: 0 0 10px 0; text-align: center; }
+        
+        /* Review Grid */
+        .review-container {
+            margin: 20px 0; width: 90%; max-width: 600px;
+            background: rgba(255,255,255,0.05); padding: 20px; border-radius: 15px;
+            text-align: center;
+        }
+        .review-grid {
+            display: flex; flex-wrap: wrap; gap: 15px; justify-content: center; margin-top: 15px;
+        }
+        .review-card {
+            background: #334155; padding: 10px 15px; border-radius: 8px;
+            cursor: pointer; transition: transform 0.2s, background 0.2s;
+            display: flex; flex-direction: column; align-items: center;
+            border: 1px solid #475569;
+            min-width: 60px; /* 增大触控区域 */
+        }
+        .review-card:hover { transform: scale(1.1); background: var(--primary); color: black; }
+        .review-card .rc-char { font-family: "KaiTi", serif; font-size: 28px; font-weight: bold; }
+        .review-card .rc-pinyin { font-size: 14px; margin-top: 4px; opacity: 0.9; font-family: sans-serif; }
+        .speaker-icon { font-size: 14px; margin-top: 5px; }
+
+        /* --- Mobile Optimization --- */
+        @media (max-width: 600px) {
+            #header { padding: 10px 20px; font-size: 0.9rem; }
+            .stat { font-size: 1rem; }
+            
+            /* 结算画面手机优化 */
+            .result-title { font-size: 3.5rem; line-height: 1.1; margin-top: 20px;} 
+            #result-msg { font-size: 1.5rem; }
+            
+            /* 复习卡片更大，方便点击 */
+            .review-card { padding: 15px 20px; min-width: 70px; }
+            .review-card .rc-char { font-size: 36px; }
+            .review-card .rc-pinyin { font-size: 16px; }
+            
+            #input-field { width: 80%; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Setup Screen -->
+    <div id="setup-screen">
+        <div class="panel">
+            <h1>✨ Hanzi Defense (v5.1)</h1>
+            <p style="color:#94a3b8; text-align:left">1. Paste text:</p>
+            <textarea id="word-source" placeholder="e.g., 你好世界 (Paste lesson text here)"></textarea>
+            <div class="save-tip">✅ Auto-saves your text</div>
+
+            <p style="color:#94a3b8; text-align:left">2. Select Difficulty:</p>
+            <div class="difficulty-selector">
+                <label class="radio-label"><input type="radio" name="diff" value="easy" checked> Easy (Slow)</label>
+                <label class="radio-label"><input type="radio" name="diff" value="hard"> Hard (Fast)</label>
+            </div>
+
+            <div>
+                <button class="btn-primary" onclick="parseAndStart()">Start Game</button>
+                <button class="btn-secondary" onclick="shareLink()">🔗 Copy Link</button>
+            </div>
+            <p id="share-tip" style="color:var(--primary); font-size:12px; opacity:0; margin-top:10px;">Copied!</p>
+        </div>
+    </div>
+
+    <!-- Game Board -->
+    <div id="header">
+        <div class="stat">Remaining: <span id="remain-val">0</span></div>
+        <div class="stat">Score: <span id="score-val">0</span></div>
+        <div class="stat">Lives: <span style="color:#ef4444" id="lives-val">5</span></div>
+    </div>
+
+    <div id="game-area">
+        <div id="danger-zone"></div>
+    </div>
+
+    <div id="input-container">
+        <input type="text" id="input-field" placeholder="Type here..." autocomplete="off">
+    </div>
+
+    <!-- Result Modal -->
+    <div id="result-modal">
+        <h1 id="result-title" class="result-title"></h1>
+        <p id="result-msg" style="color: #cbd5e1; font-size: 1.2rem;"></p>
+        
+        <!-- Review Section -->
+        <div id="review-section" class="review-container" style="display:none;">
+            <div style="color: #ef4444; font-weight:bold; margin-bottom:10px; font-size:1.2rem;">
+                📢 Review & Click to Listen:
+            </div>
+            <div id="review-grid" class="review-grid"></div>
+        </div>
+
+        <button class="btn-primary" onclick="location.reload()" style="margin: 20px 0 40px 0;">Play Again</button>
+    </div>
+
+    <script>
+        // --- Audio & TTS ---
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        
+        function playSound(type) {
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.connect(gain); gain.connect(audioCtx.destination);
+            const now = audioCtx.currentTime;
+            
+            if (type === 'shoot') {
+                osc.frequency.setValueAtTime(200, now);
+                osc.frequency.exponentialRampToValueAtTime(600, now+0.2);
+                gain.gain.setValueAtTime(0.1, now); gain.gain.linearRampToValueAtTime(0, now+0.2);
+                osc.start(now); osc.stop(now+0.2);
+            } else if (type === 'miss') {
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(100, now);
+                osc.frequency.linearRampToValueAtTime(50, now+0.3);
+                gain.gain.setValueAtTime(0.2, now); gain.gain.linearRampToValueAtTime(0, now+0.3);
+                osc.start(now); osc.stop(now+0.3);
+            } else if (type === 'hit') {
+                osc.type = 'square';
+                osc.frequency.setValueAtTime(100, now);
+                osc.frequency.exponentialRampToValueAtTime(30, now + 0.3);
+                gain.gain.setValueAtTime(0.2, now);
+                gain.gain.linearRampToValueAtTime(0, now + 0.3);
+                osc.start(now); osc.stop(now + 0.3);
+            }
+        }
+
+        function speak(text) {
+            if ('speechSynthesis' in window) {
+                window.speechSynthesis.cancel();
+                const utterance = new SpeechSynthesisUtterance(text);
+                utterance.lang = 'zh-CN';
+                utterance.rate = 0.8; 
+                window.speechSynthesis.speak(utterance);
+            }
+        }
+
+        // --- Game State ---
+        let CONFIG = { spawnRate: 3000, fallSpeedMin: 0.3, fallSpeedMax: 0.6 };
+        let wordPool = [];
+        let activeWords = [];
+        let missedWords = new Set(); 
+        let score = 0;
+        let lives = 5;
+        let isPlaying = false;
+        let lastTime = 0;
+        let spawnTimer = 0;
+
+        // --- Init & Auto-Save Logic ---
+        const { pinyin } = pinyinPro; 
+
+        window.onload = () => {
+            const params = new URLSearchParams(window.location.search);
+            const words = params.get('words');
+            const diff = params.get('diff');
+            
+            // 3. 自动读取保存的汉字
+            if (words) {
+                // 如果URL有参数，优先使用URL
+                document.getElementById('word-source').value = decodeURIComponent(words);
+                if (diff) document.querySelector(`input[value="${diff}"]`).checked = true;
+                document.getElementById('setup-screen').style.display = 'none';
+                initGame(decodeURIComponent(words), diff || 'easy');
+            } else {
+                // 否则检查 localStorage
+                const savedText = localStorage.getItem('hanzi_saved_text');
+                if (savedText) {
+                    document.getElementById('word-source').value = savedText;
+                }
+            }
+        };
+
+        function parseAndStart() {
+            const text = document.getElementById('word-source').value;
+            const diff = document.querySelector('input[name="diff"]:checked').value;
+            
+            if (!text.trim()) return alert("Please enter text!");
+            
+            // 3. 自动保存汉字到本地
+            localStorage.setItem('hanzi_saved_text', text);
+
+            document.getElementById('setup-screen').style.transform = 'translateY(-100%)';
+            initGame(text, diff);
+        }
+
+        function initGame(text, diff) {
+            if (diff === 'hard') {
+                CONFIG.spawnRate = 1500; CONFIG.fallSpeedMin = 1.0; CONFIG.fallSpeedMax = 1.8;
+            } else {
+                CONFIG.spawnRate = 3500; CONFIG.fallSpeedMin = 0.4; CONFIG.fallSpeedMax = 0.7;
+            }
+
+            const rawChars = text.match(/[\u4e00-\u9fa5]/g);
+            if (!rawChars) return alert("No Chinese characters found.");
+
+            wordPool = [...rawChars, ...rawChars]; 
+            wordPool.sort(() => Math.random() - 0.5);
+            
+            score = 0; lives = 5; activeWords = []; missedWords.clear();
+            isPlaying = true; updateUI();
+            
+            document.getElementById('input-field').focus();
+            lastTime = performance.now();
+            
+            // 1. 立即生成第一个字，不用等
+            spawnOne();
+            spawnTimer = 0;
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        function shareLink() {
+            const text = document.getElementById('word-source').value;
+            const diff = document.querySelector('input[name="diff"]:checked').value;
+            if (!text) return;
+            const url = `${window.location.origin}${window.location.pathname}?words=${encodeURIComponent(text)}&diff=${diff}`;
+            navigator.clipboard.writeText(url).then(() => {
+                document.getElementById('share-tip').style.opacity = 1;
+            });
+        }
+
+        // --- Game Loop ---
+        function gameLoop(timestamp) {
+            if (!isPlaying) return;
+            const dt = timestamp - lastTime;
+            lastTime = timestamp;
+
+            spawnTimer += dt;
+            if (spawnTimer > CONFIG.spawnRate && wordPool.length > 0) {
+                spawnOne();
+                spawnTimer = 0;
+            }
+
+            if (wordPool.length === 0 && activeWords.length === 0) {
+                endGame(true);
+                return;
+            }
+
+            const gameH = document.getElementById('game-area').clientHeight;
+
+            activeWords.forEach((word, index) => {
+                if (word.isLocked) return;
+
+                word.y += word.speed;
+                word.el.style.top = word.y + 'px';
+
+                if (word.y > gameH * 0.6 && !word.hintShown) {
+                    word.el.classList.add('show-hint');
+                    word.hintShown = true;
+                }
+
+                if (word.y > gameH - 50) {
+                    handleMiss(index);
+                }
+            });
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        function spawnOne() {
+            const char = wordPool.shift();
+            const py = pinyin(char);
+            
+            const el = document.createElement('div');
+            el.className = 'bubble';
+            el.innerHTML = `<span class="pinyin-hint">${py}</span><span class="char-text">${char}</span>`;
+            
+            const x = Math.random() * (document.getElementById('game-area').clientWidth - 90) + 10;
+            el.style.left = x + 'px';
+            el.style.top = '-90px';
+            el.style.borderColor = `hsl(${Math.random()*360}, 80%, 70%)`;
+
+            document.getElementById('game-area').appendChild(el);
+            
+            activeWords.push({
+                el: el, char: char, pinyin: py, x: x, y: -90,
+                speed: CONFIG.fallSpeedMin + Math.random() * (CONFIG.fallSpeedMax - CONFIG.fallSpeedMin),
+                isLocked: false,
+                hintShown: false
+            });
+            updateUI();
+        }
+
+        function handleMiss(index) {
+            const word = activeWords[index];
+            playSound('miss');
+            missedWords.add(word.char); 
+
+            word.el.style.background = 'red';
+            word.el.style.opacity = 0;
+            setTimeout(() => word.el.remove(), 200);
+            
+            wordPool.push(word.char);
+            
+            activeWords.splice(index, 1);
+            lives--;
+            updateUI();
+            if (lives <= 0) endGame(false);
+        }
+
+        // --- Input & Collision ---
+        const inputField = document.getElementById('input-field');
+        let isComposing = false;
+        
+        inputField.addEventListener('compositionstart', () => isComposing = true);
+        inputField.addEventListener('compositionend', (e) => { isComposing = false; checkInput(e.data); });
+        inputField.addEventListener('input', () => { if (!isComposing && inputField.value) checkInput(inputField.value); });
+
+        function checkInput(text) {
+            if (!text) return;
+            const char = text.slice(-1);
+            let targetIdx = -1, maxY = -9999;
+
+            activeWords.forEach((w, i) => {
+                if (w.char === char && !w.isLocked) {
+                    if (w.y > maxY) { maxY = w.y; targetIdx = i; }
+                }
+            });
+
+            if (targetIdx !== -1) {
+                launchProjectile(activeWords[targetIdx], char);
+                inputField.value = '';
+            }
+        }
+
+        function launchProjectile(word, char) {
+            word.isLocked = true;
+            playSound('shoot');
+            const startRect = inputField.getBoundingClientRect();
+            
+            const proj = document.createElement('div');
+            proj.className = 'projectile';
+            proj.innerText = char;
+            proj.style.left = (startRect.left + startRect.width/2 - 25) + 'px';
+            proj.style.top = startRect.top + 'px';
+            document.body.appendChild(proj);
+
+            const gameRect = document.getElementById('game-area').getBoundingClientRect();
+            const tx = gameRect.left + word.x + 15; 
+            const ty = gameRect.top + word.y + 15;
+
+            proj.animate([
+                { transform: 'translate(0,0)' },
+                { transform: `translate(${tx - parseFloat(proj.style.left)}px, ${ty - parseFloat(proj.style.top)}px)` }
+            ], { duration: 400, easing: 'cubic-bezier(0.25, 1, 0.5, 1)' })
+            .onfinish = () => {
+                proj.remove();
+                handleCollision(word);
+            };
+        }
+
+        function handleCollision(word) {
+            playSound('hit');
+            for(let i=0; i<8; i++) {
+                const p = document.createElement('div');
+                p.className = 'particle';
+                p.style.background = 'white';
+                p.style.width = (Math.random()*6+4)+'px'; p.style.height = p.style.width;
+                p.style.position = 'absolute';
+                p.style.left = (word.x+40)+'px'; p.style.top = (word.y+40)+'px';
+                p.style.borderRadius = '50%';
+                document.getElementById('game-area').appendChild(p);
+                
+                const angle = Math.random()*Math.PI*2;
+                const d = Math.random()*50+30;
+                p.animate([
+                    { transform: 'translate(0,0) scale(1)', opacity:1 },
+                    { transform: `translate(${Math.cos(angle)*d}px, ${Math.sin(angle)*d}px) scale(0)`, opacity:0 }
+                ], { duration: 400 }).onfinish = () => p.remove();
+            }
+
+            word.el.remove();
+            const idx = activeWords.indexOf(word);
+            if (idx > -1) activeWords.splice(idx, 1);
+            score += 10;
+            updateUI();
+        }
+
+        function updateUI() {
+            document.getElementById('score-val').innerText = score;
+            document.getElementById('lives-val').innerText = "❤".repeat(lives);
+            document.getElementById('remain-val').innerText = wordPool.length + activeWords.length;
+        }
+
+        function endGame(win) {
+            isPlaying = false;
+            const modal = document.getElementById('result-modal');
+            const title = document.getElementById('result-title');
+            const msg = document.getElementById('result-msg');
+            const reviewSec = document.getElementById('review-section');
+            const reviewGrid = document.getElementById('review-grid');
+
+            modal.style.display = 'flex';
+            title.innerText = win ? "🎉 YOU WIN!" : "💀 GAME OVER";
+            title.style.color = win ? "var(--primary)" : "var(--danger)";
+            msg.innerText = `Score: ${score}`;
+
+            // Populate Mistake Review
+            reviewGrid.innerHTML = '';
+            if (missedWords.size > 0) {
+                reviewSec.style.display = 'block';
+                missedWords.forEach(char => {
+                    const card = document.createElement('div');
+                    card.className = 'review-card';
+                    const py = pinyin(char);
+                    // 2. 优化：复习卡片字体更大
+                    card.innerHTML = `
+                        <span class="rc-char">${char}</span>
+                        <span class="rc-pinyin">${py}</span>
+                        <span class="speaker-icon">🔊</span>
+                    `;
+                    card.onclick = () => speak(char); 
+                    reviewGrid.appendChild(card);
+                });
+            } else {
+                reviewSec.style.display = 'none';
+                if (win) msg.innerText += " - Perfect! No mistakes.";
+            }
+        }
+        
+        document.addEventListener('click', () => {
+           if(isPlaying) document.getElementById('input-field').focus(); 
+        });
+    </script>
+</body>
+</html>

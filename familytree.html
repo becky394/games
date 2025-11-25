@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>中文大家庭 - 最终挑战版 (No Hints)</title>
+    <style>
+        /* --- 基础设置 --- */
+        :root {
+            --dad-color: #3498db;
+            --dad-bg: #eef7fc;
+            --mom-color: #e91e63;
+            --mom-bg: #fdf2f6;
+            --line-color: #95a5a6;
+        }
+
+        body {
+            font-family: "Microsoft YaHei", "Segoe UI", sans-serif;
+            background-color: #f0f2f5;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+            user-select: none;
+        }
+
+        h1 { color: #2c3e50; margin: 5px 0; font-size: 24px; }
+        .subtitle { color: #7f8c8d; font-size: 14px; margin-bottom: 15px; }
+
+        .game-wrapper {
+            width: 100%;
+            max-width: 1200px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        /* --- 树状结构容器 --- */
+        .tree-container {
+            background: white;
+            padding: 30px 40px;
+            border-radius: 20px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.05);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            position: relative;
+            width: 100%;
+            overflow-x: auto;
+        }
+
+        /* 侧边层级标签 */
+        .level-label {
+            position: absolute;
+            left: 10px;
+            font-size: 11px;
+            font-weight: bold;
+            color: #bdc3c7;
+            text-transform: uppercase;
+            writing-mode: vertical-rl;
+            text-orientation: mixed;
+            letter-spacing: 2px;
+        }
+
+        /* --- 通用布局行 --- */
+        .level-row {
+            display: flex;
+            justify-content: center;
+            gap: 40px;
+            position: relative;
+            padding-bottom: 45px;
+        }
+        .level-row:last-child { padding-bottom: 0; }
+
+        /* --- 分组框 --- */
+        .side-group {
+            border-radius: 15px;
+            padding: 15px;
+            position: relative;
+            display: flex;
+            gap: 15px;
+            align-items: flex-end;
+        }
+
+        .dad-side { background-color: var(--dad-bg); border: 2px dashed #a9d5ef; }
+        .mom-side { background-color: var(--mom-bg); border: 2px dashed #f8bbd0; }
+
+        /* --- 连接线 --- */
+        .marriage-line {
+            width: 30px; height: 2px; background: var(--line-color);
+            align-self: center; margin: 0 2px;
+        }
+        .vertical-line {
+            position: absolute; width: 2px; background: var(--line-color);
+            left: 50%; transform: translateX(-50%); z-index: 0;
+        }
+        .l0-to-l1 { height: 45px; bottom: 0; } 
+
+        /* --- 目标槽位 (Drop Zone) --- */
+        .drop-zone {
+            width: 100px;  /* 稍微加宽 */
+            height: 130px; /* 稍微加高 */
+            background: rgba(255,255,255,0.9);
+            border: 2px solid #e0e0e0;
+            border-radius: 12px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s;
+            position: relative;
+            z-index: 2;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+            padding: 5px;
+        }
+
+        /* 颜色定义 */
+        .role-grand { border-color: #95a5a6; }
+        .role-dad { border-color: var(--dad-color); }
+        .role-mom { border-color: var(--mom-color); }
+        .role-kid { border-color: #f39c12; }
+        .role-me  { border-color: #27ae60; background: #e8f5e9; border-width: 3px; transform: scale(1.05); }
+
+        .drop-zone.highlight { transform: scale(1.1); background: #fffbe6; border-color: #f1c40f; }
+        
+        /* 匹配成功后的样式 */
+        .matched { background-color: #d4efdf !important; border-color: #27ae60 !important; }
+
+        .icon { font-size: 38px; margin-bottom: 8px; }
+        
+        /* 目标框里的英语标签 (只留英语，不留拼音) */
+        .label { 
+            font-size: 11px; 
+            color: #7f8c8d; 
+            text-transform: uppercase; 
+            font-weight: bold; 
+            text-align: center; 
+            line-height: 1.3;
+            height: 30px; /* 占位高度，保持对齐 */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* --- 底部待选卡片 (Cards) - 字号加大版 --- */
+        .cards-container {
+            margin-top: 25px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            justify-content: center;
+            padding: 20px;
+            background: #fff;
+            border-radius: 15px;
+            width: 100%;
+            min-height: 100px;
+            box-shadow: inset 0 0 10px rgba(0,0,0,0.05);
+        }
+
+        .card {
+            width: 110px;  /* 变大 */
+            height: 70px;  /* 变高 */
+            background: white;
+            border: 3px solid #34495e; /* 边框加粗 */
+            border-radius: 10px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            cursor: grab;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            transition: transform 0.1s;
+        }
+        .card:active { cursor: grabbing; transform: scale(0.95); }
+        .card.hidden { display: none; }
+        
+        /* 加大字号 */
+        .hanzi { font-size: 28px; font-weight: bold; color: #2c3e50; line-height: 1.1; }
+        .pinyin { font-size: 15px; color: #555; font-weight: 500; }
+
+        /* 动画 */
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-5px); }
+            75% { transform: translateX(5px); }
+        }
+        .shake { animation: shake 0.3s; background: #fadbd8 !important; }
+
+        #success-modal {
+            display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            background: white; padding: 30px; border-radius: 15px; box-shadow: 0 10px 50px rgba(0,0,0,0.3);
+            text-align: center; z-index: 100; border: 5px solid #27ae60; min-width: 300px;
+        }
+        
+        .btn-sound { margin-top: 15px; font-size: 13px; color: #3498db; cursor: pointer; text-decoration: underline; }
+
+        @media (max-width: 768px) {
+            .drop-zone { width: 80px; height: 110px; }
+            .card { width: 90px; height: 60px; }
+            .hanzi { font-size: 22px; }
+            .pinyin { font-size: 12px; }
+            .icon { font-size: 30px; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="game-wrapper">
+        <h1>🌳 中文大家庭 (No Pinyin Hints)</h1>
+        <div class="subtitle">看图识关系，拖入正确的汉字卡片</div>
+
+        <div class="tree-container">
+            
+            <div class="level-label" style="top: 50px;">Grandparents</div>
+            <div class="level-label" style="top: 240px;">Parents</div>
+            <div class="level-label" style="bottom: 60px;">Children</div>
+
+            <!-- Level 0: 祖父母 -->
+            <div class="level-row">
+                <!-- 爷爷奶奶 (去掉拼音提示，只留英语) -->
+                <div class="side-group dad-side" style="padding-bottom: 25px;">
+                    <div class="drop-zone role-grand" data-target="yeye">
+                        <div class="icon">👴</div>
+                        <div class="label">Dad's Dad</div>
+                    </div>
+                    <div class="marriage-line"></div>
+                    <div class="drop-zone role-grand" data-target="nainai">
+                        <div class="icon">👵</div>
+                        <div class="label">Dad's Mom</div>
+                    </div>
+                    <div class="vertical-line l0-to-l1"></div>
+                </div>
+
+                <div style="width: 30px"></div>
+
+                <!-- 外公外婆 (去掉拼音提示) -->
+                <div class="side-group mom-side" style="padding-bottom: 25px;">
+                    <div class="drop-zone role-grand" data-target="waigong">
+                        <div class="icon">👴</div>
+                        <div class="label">Mom's Dad</div>
+                    </div>
+                    <div class="marriage-line"></div>
+                    <div class="drop-zone role-grand" data-target="waipo">
+                        <div class="icon">👵</div>
+                        <div class="label">Mom's Mom</div>
+                    </div>
+                    <div class="vertical-line l0-to-l1"></div>
+                </div>
+            </div>
+
+            <!-- Level 1: 父母 -->
+            <div class="level-row">
+                <div class="side-group dad-side">
+                    <div class="drop-zone role-dad" data-target="gugu">
+                        <div class="icon">👩</div>
+                        <div class="label">Dad's Sister</div>
+                    </div>
+                    <div class="drop-zone role-dad" data-target="baba" style="border-width:3px;">
+                        <div class="icon">👨</div>
+                        <div class="label">Dad</div>
+                    </div>
+                    <div class="drop-zone role-dad" data-target="shushu">
+                        <div class="icon">👨👓</div>
+                        <div class="label">Dad's Brother</div>
+                    </div>
+                </div>
+
+                <!-- 婚姻连线 -->
+                <div style="position: relative; width: 40px; align-self: center; height: 2px; background: #333;">
+                    <div style="position: absolute; left: 50%; top: 0; width: 2px; height: 85px; background: #333; z-index: 0;"></div>
+                </div>
+
+                <div class="side-group mom-side">
+                    <div class="drop-zone role-mom" data-target="jiujiu">
+                        <div class="icon">👨</div>
+                        <div class="label">Mom's Brother</div>
+                    </div>
+                    <div class="drop-zone role-mom" data-target="mama" style="border-width:3px;">
+                        <div class="icon">👩</div>
+                        <div class="label">Mom</div>
+                    </div>
+                    <div class="drop-zone role-mom" data-target="ayi">
+                        <div class="icon">👩💄</div>
+                        <div class="label">Mom's Sister</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Level 2: 孩子 -->
+            <div class="level-row" style="margin-top: 20px; border-top: 2px solid #333; padding-top: 25px; width: 95%;">
+                <div class="drop-zone role-kid" data-target="gege">
+                    <div class="icon">👦⬆️</div>
+                    <div class="label">Older Bro</div>
+                </div>
+                <div class="drop-zone role-kid" data-target="jiejie">
+                    <div class="icon">👧⬆️</div>
+                    <div class="label">Older Sis</div>
+                </div>
+
+                <div class="drop-zone role-me">
+                    <div class="icon">😸</div>
+                    <div class="label">ME</div>
+                </div>
+
+                <div class="drop-zone role-kid" data-target="didi">
+                    <div class="icon">👶</div>
+                    <div class="label">Younger Bro</div>
+                </div>
+                <div class="drop-zone role-kid" data-target="meimei">
+                    <div class="icon">👧🍭</div>
+                    <div class="label">Younger Sis</div>
+                </div>
+            </div>
+
+        </div>
+
+        <div class="cards-container" id="cards-pool"></div>
+        <div class="btn-sound" onclick="testAudio()">🔊 开启声音 / Unmute Sound</div>
+    </div>
+
+    <div id="success-modal">
+        <h1 style="margin:0">🌟 完美! Perfect! 🌟</h1>
+        <p style="font-size:18px; margin:10px 0;">你已经认识了所有家庭成员！</p>
+        <button onclick="location.reload()" style="padding:12px 30px; background:#3498db; color:white; border:none; border-radius:8px; cursor:pointer; font-size:18px; font-weight:bold; box-shadow: 0 4px 0 #2980b9;">再玩一次 (Replay)</button>
+    </div>
+
+    <script>
+        /* --- Audio (不变) --- */
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        function playSound(type) {
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.connect(gain); gain.connect(audioCtx.destination);
+            if (type === 'ok') {
+                osc.type = 'sine'; osc.frequency.setValueAtTime(600, audioCtx.currentTime); osc.frequency.exponentialRampToValueAtTime(1000, audioCtx.currentTime + 0.1);
+                gain.gain.setValueAtTime(0.2, audioCtx.currentTime); gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
+                osc.start(); osc.stop(audioCtx.currentTime + 0.3);
+            } else if (type === 'err') {
+                osc.type = 'sawtooth'; osc.frequency.setValueAtTime(100, audioCtx.currentTime); osc.frequency.linearRampToValueAtTime(80, audioCtx.currentTime + 0.3);
+                gain.gain.setValueAtTime(0.2, audioCtx.currentTime); gain.gain.linearRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
+                osc.start(); osc.stop(audioCtx.currentTime + 0.3);
+            } else if (type === 'win') {
+                [523, 659, 783, 1046, 1318, 1568].forEach((f, i) => {
+                    setTimeout(() => {
+                        const o = audioCtx.createOscillator(); const g = audioCtx.createGain();
+                        o.connect(g); g.connect(audioCtx.destination);
+                        o.frequency.value = f; g.gain.value = 0.1; g.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
+                        o.start(); o.stop(audioCtx.currentTime + 0.3);
+                    }, i * 120);
+                });
+            }
+        }
+        function testAudio() { playSound('ok'); }
+
+        /* --- Data --- */
+        const data = [
+            { id: 'yeye', h: '爷爷', p: 'yé ye' }, { id: 'nainai', h: '奶奶', p: 'nǎi nai' },
+            { id: 'waigong', h: '外公', p: 'wài gōng' }, { id: 'waipo', h: '外婆', p: 'wài pó' },
+            { id: 'baba', h: '爸爸', p: 'bà ba' }, { id: 'mama', h: '妈妈', p: 'mā ma' },
+            { id: 'shushu', h: '叔叔', p: 'shū shu' }, { id: 'gugu', h: '姑姑', p: 'gū gu' },
+            { id: 'jiujiu', h: '舅舅', p: 'jiù jiu' }, { id: 'ayi', h: '阿姨', p: 'ā yí' },
+            { id: 'gege', h: '哥哥', p: 'gē ge' }, { id: 'didi', h: '弟弟', p: 'dì di' },
+            { id: 'jiejie', h: '姐姐', p: 'jiě jie' }, { id: 'meimei', h: '妹妹', p: 'mèi mei' }
+        ];
+
+        let matched = 0;
+        const pool = document.getElementById('cards-pool');
+
+        function init() {
+            [...data].sort(()=>Math.random()-0.5).forEach(item => {
+                const el = document.createElement('div');
+                el.className = 'card';
+                el.draggable = true;
+                el.id = 'c-' + item.id;
+                // 卡片上显示大大的汉字和拼音
+                el.innerHTML = `<div class="hanzi">${item.h}</div><div class="pinyin">${item.p}</div>`;
+                el.dataset.target = item.id;
+                
+                el.addEventListener('dragstart', e => {
+                    if (audioCtx.state === 'suspended') audioCtx.resume();
+                    e.dataTransfer.setData('tid', item.id);
+                    e.dataTransfer.setData('cid', el.id);
+                    setTimeout(()=>el.style.opacity=0.5,0);
+                });
+                el.addEventListener('dragend', ()=>el.style.opacity=1);
+                pool.appendChild(el);
+            });
+        }
+
+        document.querySelectorAll('.drop-zone[data-target]').forEach(z => {
+            z.addEventListener('dragover', e => e.preventDefault());
+            z.addEventListener('dragenter', e => { e.preventDefault(); z.classList.add('highlight'); });
+            z.addEventListener('dragleave', () => z.classList.remove('highlight'));
+            z.addEventListener('drop', e => {
+                e.preventDefault();
+                z.classList.remove('highlight');
+                const tid = e.dataTransfer.getData('tid');
+                const cid = e.dataTransfer.getData('cid');
+                if (!cid) return; 
+                const card = document.getElementById(cid);
+
+                if (tid === z.dataset.target) {
+                    // 正确：播放声音，隐藏卡片，目标框变色并显示汉字
+                    playSound('ok');
+                    card.classList.add('hidden');
+                    z.classList.add('matched');
+                    // 匹配成功后，目标框里才显示大汉字
+                    z.innerHTML = `
+                        <div style="font-size:20px; margin-bottom:5px;">✅</div>
+                        <div class="hanzi" style="font-size:26px">${card.querySelector('.hanzi').innerText}</div>
+                        <div class="pinyin" style="font-size:14px">${card.querySelector('.pinyin').innerText}</div>
+                    `;
+                    matched++;
+                    if(matched === data.length) {
+                        setTimeout(()=>{ playSound('win'); document.getElementById('success-modal').style.display = 'block'; }, 500);
+                    }
+                } else {
+                    // 错误
+                    playSound('err');
+                    z.classList.add('shake');
+                    setTimeout(()=>z.classList.remove('shake'), 400);
+                }
+            });
+        });
+
+        init();
+    </script>
+</body>
+</html>
